@@ -1,12 +1,29 @@
 use super::{root, WasiCtx};
 use crate::error;
+use magnus::value::InnerValue;
 use magnus::{
     class, function, gc::Marker, method, typed_data::Obj, value::Opaque, DataTypeFunctions, Error,
     Module, Object, RArray, RHash, RString, Ruby, TryConvert, TypedData,
 };
 use std::cell::RefCell;
 use std::{fs::File, path::PathBuf};
-use wasi_common::pipe::ReadPipe;
+use wasi_common::pipe::{ReadPipe, WritePipe};
+
+pub struct OpaqueWrapper<T>(pub Opaque<T>);
+
+impl std::io::Write for OpaqueWrapper<RString> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let ruby = Ruby::get().unwrap(); // errors on non-Ruby thread
+
+        self.0.get_inner_with(&ruby).write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let ruby = Ruby::get().unwrap(); // errors on non-Ruby thread
+
+        self.0.get_inner_with(&ruby).flush()
+    }
+}
 
 enum ReadStream {
     Inherit,
@@ -27,12 +44,14 @@ impl ReadStream {
 enum WriteStream {
     Inherit,
     Path(Opaque<RString>),
+    Buffer(Opaque<RString>),
 }
 impl WriteStream {
     pub fn mark(&self, marker: &Marker) {
         match self {
             Self::Inherit => (),
             Self::Path(v) => marker.mark(*v),
+            Self::Buffer(v) => marker.mark(*v),
         }
     }
 }
@@ -150,6 +169,17 @@ impl WasiCtxBuilder {
     }
 
     /// @yard
+    /// Set stdout to write to a buffer.
+    /// @param buffer [String] The string buffer to write to.
+    /// @def set_stdout_buffer(buffer)
+    /// @return [WasiCtxBuilder] +self+
+    pub fn set_stdout_buffer(rb_self: RbSelf, buffer: RString) -> RbSelf {
+        let mut inner = rb_self.inner.borrow_mut();
+        inner.stdout = Some(WriteStream::Buffer(buffer.into()));
+        rb_self
+    }
+
+    /// @yard
     /// Inherit stderr from the current Ruby process.
     /// @return [WasiCtxBuilder] +self+
     pub fn inherit_stderr(rb_self: RbSelf) -> RbSelf {
@@ -167,6 +197,16 @@ impl WasiCtxBuilder {
     pub fn set_stderr_file(rb_self: RbSelf, path: RString) -> RbSelf {
         let mut inner = rb_self.inner.borrow_mut();
         inner.stderr = Some(WriteStream::Path(path.into()));
+        rb_self
+    }
+    /// @yard
+    /// Set stderr to write to a buffer.
+    /// @param buffer [String] The string buffer to write to.
+    /// @def set_stderr_buffer(buffer)
+    /// @return [WasiCtxBuilder] +self+
+    pub fn set_stderr_buffer(rb_self: RbSelf, buffer: RString) -> RbSelf {
+        let mut inner = rb_self.inner.borrow_mut();
+        inner.stderr = Some(WriteStream::Buffer(buffer.into()));
         rb_self
     }
 
@@ -216,6 +256,10 @@ impl WasiCtxBuilder {
                 WriteStream::Path(path) => {
                     builder.stdout(file_w(ruby.get_inner(*path)).map(wasi_file)?)
                 }
+                WriteStream::Buffer(buffer) => {
+                    let pipe = WritePipe::new(OpaqueWrapper(*buffer));
+                    builder.stdout(Box::new(pipe))
+                }
             };
         }
 
@@ -224,6 +268,10 @@ impl WasiCtxBuilder {
                 WriteStream::Inherit => builder.inherit_stderr(),
                 WriteStream::Path(path) => {
                     builder.stderr(file_w(ruby.get_inner(*path)).map(wasi_file)?)
+                }
+                WriteStream::Buffer(buffer) => {
+                    let pipe = WritePipe::new(OpaqueWrapper(*buffer));
+                    builder.stderr(Box::new(pipe))
                 }
             };
         }
@@ -282,11 +330,19 @@ pub fn init() -> Result<(), Error> {
         "set_stdout_file",
         method!(WasiCtxBuilder::set_stdout_file, 1),
     )?;
+    class.define_method(
+        "set_stdout_buffer",
+        method!(WasiCtxBuilder::set_stdout_buffer, 1),
+    )?;
 
     class.define_method("inherit_stderr", method!(WasiCtxBuilder::inherit_stderr, 0))?;
     class.define_method(
         "set_stderr_file",
         method!(WasiCtxBuilder::set_stderr_file, 1),
+    )?;
+    class.define_method(
+        "set_stderr_buffer",
+        method!(WasiCtxBuilder::set_stderr_buffer, 1),
     )?;
 
     class.define_method("set_env", method!(WasiCtxBuilder::set_env, 1))?;

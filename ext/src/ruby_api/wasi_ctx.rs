@@ -2,6 +2,7 @@ use super::{
     root,
     wasi_ctx_builder::{file_r, file_w, wasi_file},
     WasiCtxBuilder,
+    OpaqueWrapper
 };
 use crate::error;
 use deterministic_wasi_ctx::build_wasi_ctx as wasi_deterministic_ctx;
@@ -10,7 +11,7 @@ use magnus::{
     RTypedData, Ruby, TypedData, Value,
 };
 use std::{borrow::Borrow, cell::RefCell, fs::File, path::PathBuf};
-use wasi_common::pipe::ReadPipe;
+use wasi_common::pipe::{ReadPipe, WritePipe};
 use wasi_common::WasiCtx as WasiCtxImpl;
 
 /// @yard
@@ -74,7 +75,17 @@ impl WasiCtx {
         inner.set_stdout(cs);
         rb_self
     }
-
+    /// @yard
+    /// Set stdin to the specified String.
+    /// @param content [String]
+    /// @def set_stout_buffer(content)
+    /// @return [WasiCtx] +self+
+    fn set_stdout_buffer(rb_self: RbSelf, buffer: RString) -> RbSelf {
+        let inner = rb_self.inner.borrow_mut();
+        let pipe = WritePipe::new(OpaqueWrapper(buffer.into()));
+        inner.set_stdout(Box::new(pipe));
+        rb_self
+    }
     /// @yard
     /// Set stderr to write to a file. Will truncate the file if it exists,
     /// otherwise try to create it.
@@ -85,6 +96,17 @@ impl WasiCtx {
         let inner = rb_self.inner.borrow_mut();
         let cs = file_w(path).map(wasi_file).unwrap();
         inner.set_stderr(cs);
+        rb_self
+    }
+    /// @yard
+    /// Set stdin to the specified String.
+    /// @param content [String]
+    /// @def set_stout_buffer(content)
+    /// @return [WasiCtx] +self+
+    fn set_stderr_buffer(rb_self: RbSelf, buffer: RString) -> RbSelf {
+        let inner = rb_self.inner.borrow_mut();
+        let pipe = WritePipe::new(OpaqueWrapper(buffer.into()));
+        inner.set_stderr(Box::new(pipe));
         rb_self
     }
 
@@ -105,6 +127,9 @@ pub fn init() -> Result<(), Error> {
     class.define_method("set_stdin_file", method!(WasiCtx::set_stdin_file, 1))?;
     class.define_method("set_stdin_string", method!(WasiCtx::set_stdin_string, 1))?;
     class.define_method("set_stdout_file", method!(WasiCtx::set_stdout_file, 1))?;
+    class.define_method("set_stdout_buffer", method!(WasiCtx::set_stdout_buffer, 1))?;
     class.define_method("set_stderr_file", method!(WasiCtx::set_stderr_file, 1))?;
+    class.define_method("set_stderr_buffer", method!(WasiCtx::set_stderr_buffer, 1))?;
+
     Ok(())
 }

@@ -1,6 +1,6 @@
 require "spec_helper"
 require "json"
-
+require "pry"
 module Wasmtime
   RSpec.describe "WASI" do
     include_context(:tmpdir)
@@ -53,6 +53,25 @@ module Wasmtime
         expect(stdout.fetch("name")).to eq("stdout")
         expect(stderr.fetch("name")).to eq("stderr")
         expect(stdout.dig("wasi", "stdin")).to eq("stdin content")
+      end
+
+      it "writes std streams to buffers" do
+        File.write(tempfile_path("stdin"), "stdin content")
+
+        stdout_str = ""
+        stderr_str = ""
+        wasi_config = WasiCtxBuilder.new
+          .set_stdin_file(tempfile_path("stdin"))
+          .set_stdout_buffer(stdout_str)
+          .set_stderr_buffer(stderr_str)
+          .build
+
+        run_wasi_module(wasi_config)
+
+        parsed_stdout = JSON.parse(stdout_str)
+        parsed_stderr = JSON.parse(stderr_str)
+        expect(parsed_stdout.fetch("name")).to eq("stdout")
+        expect(parsed_stderr.fetch("name")).to eq("stderr")
       end
 
       it "reads stdin from string" do

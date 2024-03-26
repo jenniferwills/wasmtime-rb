@@ -40,6 +40,7 @@ pub use store::Store;
 pub use trap::Trap;
 pub use wasi_ctx::WasiCtx;
 pub use wasi_ctx_builder::WasiCtxBuilder;
+pub use wasi_ctx_builder::OpaqueWrapper;
 
 /// The "Wasmtime" Ruby module.
 pub fn root() -> RModule {
