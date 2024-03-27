@@ -169,7 +169,7 @@ impl WasiCtxBuilder {
     }
 
     /// @yard
-    /// Set stdout to write to a buffer.
+    /// Set stdout to write to a string buffer.
     /// @param buffer [String] The string buffer to write to.
     /// @def set_stdout_buffer(buffer)
     /// @return [WasiCtxBuilder] +self+
@@ -200,7 +200,7 @@ impl WasiCtxBuilder {
         rb_self
     }
     /// @yard
-    /// Set stderr to write to a buffer.
+    /// Set stderr to write to a string buffer.
     /// @param buffer [String] The string buffer to write to.
     /// @def set_stderr_buffer(buffer)
     /// @return [WasiCtxBuilder] +self+

@@ -76,8 +76,8 @@ impl WasiCtx {
         rb_self
     }
     /// @yard
-    /// Set stdin to the specified String.
-    /// @param content [String]
+    /// Set stdout to write to a string buffer.
+    /// @param buffer [String] The string buffer to write to.
     /// @def set_stout_buffer(content)
     /// @return [WasiCtx] +self+
     fn set_stdout_buffer(rb_self: RbSelf, buffer: RString) -> RbSelf {
@@ -99,8 +99,8 @@ impl WasiCtx {
         rb_self
     }
     /// @yard
-    /// Set stdin to the specified String.
-    /// @param content [String]
+    /// Set stderr to write to a string buffer.
+    /// @param buffer [String] The string buffer to write to.
     /// @def set_stout_buffer(content)
     /// @return [WasiCtx] +self+
     fn set_stderr_buffer(rb_self: RbSelf, buffer: RString) -> RbSelf {
